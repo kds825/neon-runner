@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { Physics } from './core/Physics';
+import { InputManager } from './core/InputManager';
+import { PlayerCar } from './entities/PlayerCar';
 
 // --- Renderer ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -35,7 +38,7 @@ dirLight.castShadow = true;
 dirLight.shadow.mapSize.set(1024, 1024);
 scene.add(dirLight);
 
-// --- Ground Plane ---
+// --- Ground Plane (physics) ---
 const groundGeo = new THREE.PlaneGeometry(40, 400);
 const groundMat = new THREE.MeshStandardMaterial({
   color: 0x111111,
@@ -46,6 +49,22 @@ const ground = new THREE.Mesh(groundGeo, groundMat);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
+
+// --- Core Systems ---
+const physics = new Physics();
+const input = new InputManager();
+
+// Physics ground
+import * as CANNON from 'cannon-es';
+const groundBody = new CANNON.Body({
+  mass: 0,
+  shape: new CANNON.Plane(),
+});
+groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+physics.addBody(groundBody);
+
+// --- Player ---
+const player = new PlayerCar(scene, physics);
 
 // --- Resize ---
 window.addEventListener('resize', () => {
@@ -59,7 +78,26 @@ const clock = new THREE.Clock();
 
 function animate(): void {
   requestAnimationFrame(animate);
-  clock.getDelta();
+  const dt = clock.getDelta();
+
+  // Physics
+  physics.update(dt);
+
+  // Player
+  player.update(input, dt);
+
+  // Chase camera (temporary, will be replaced with FP camera in Phase 3)
+  camera.position.set(
+    player.position.x,
+    player.position.y + 3,
+    player.position.z + 8
+  );
+  camera.lookAt(
+    player.position.x,
+    player.position.y + 1,
+    player.position.z
+  );
+
   renderer.render(scene, camera);
 }
 
