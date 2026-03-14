@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Physics } from './core/Physics';
 import { InputManager } from './core/InputManager';
 import { PlayerCar } from './entities/PlayerCar';
+import { FirstPersonCamera } from './core/Game';
 
 // --- Renderer ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -66,6 +67,9 @@ physics.addBody(groundBody);
 // --- Player ---
 const player = new PlayerCar(scene, physics);
 
+// --- First Person Camera ---
+const fpCamera = new FirstPersonCamera(camera);
+
 // --- Resize ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -86,17 +90,11 @@ function animate(): void {
   // Player
   player.update(input, dt);
 
-  // Chase camera (temporary, will be replaced with FP camera in Phase 3)
-  camera.position.set(
-    player.position.x,
-    player.position.y + 3,
-    player.position.z + 8
-  );
-  camera.lookAt(
-    player.position.x,
-    player.position.y + 1,
-    player.position.z
-  );
+  // First-person camera
+  const carPos = player.mesh.position;
+  const carQuat = player.mesh.quaternion;
+  const steer = (input.left ? 1 : 0) + (input.right ? -1 : 0);
+  fpCamera.update(carPos, carQuat, steer, player.speed, 80);
 
   renderer.render(scene, camera);
 }
