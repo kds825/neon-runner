@@ -8,6 +8,7 @@ import { RoadGenerator } from './systems/RoadGenerator';
 import { SpawnManager } from './systems/SpawnManager';
 import { ScoreSystem } from './systems/ScoreSystem';
 import { HUD } from './ui/HUD';
+import { SpeedLines, ExplosionPool } from './fx/Particles';
 
 // ==================== GAME STATE ====================
 let hp = 100;
@@ -51,6 +52,21 @@ dirLight.castShadow = true;
 dirLight.shadow.mapSize.set(1024, 1024);
 scene.add(dirLight);
 
+// Neon road lights (static pool — moves with player)
+const neonLights: THREE.PointLight[] = [];
+const neonColors = [0x00ffff, 0xff00ff, 0x00ff88, 0xff0055];
+for (let i = 0; i < 8; i++) {
+  const color = neonColors[i % neonColors.length];
+  const light = new THREE.PointLight(color, 2, 30);
+  light.position.set(
+    (i % 2 === 0 ? -9 : 9),
+    3,
+    -i * 25
+  );
+  scene.add(light);
+  neonLights.push(light);
+}
+
 // ==================== CORE SYSTEMS ====================
 const physics = new Physics();
 const input = new InputManager();
@@ -67,6 +83,8 @@ const road = new RoadGenerator(scene, physics);
 const spawner = new SpawnManager(scene, physics);
 const score = new ScoreSystem();
 const hud = new HUD();
+const speedLines = new SpeedLines(scene);
+const explosions = new ExplosionPool(scene);
 
 // ==================== COLLISION ====================
 player.body.addEventListener('collide', (e: { body: CANNON.Body }) => {
@@ -77,6 +95,11 @@ player.body.addEventListener('collide', (e: { body: CANNON.Body }) => {
     if (car.body === e.body) {
       hp -= 20;
       hud.flash();
+      explosions.emit(
+        car.body.position.x,
+        car.body.position.y + 0.5,
+        car.body.position.z
+      );
       car.deactivate();
       if (hp <= 0) {
         hp = 0;
@@ -113,6 +136,9 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Reusable vectors for game loop (no GC)
+const _boostForce = new CANNON.Vec3();
+
 // ==================== GAME LOOP ====================
 const clock = new THREE.Clock();
 
@@ -146,9 +172,9 @@ function animate(): void {
 
   // Apply nitro boost
   if (nitroActive) {
-    const boostForce = new CANNON.Vec3(0, 0, -2000 * dt);
-    player.body.quaternion.vmult(boostForce, boostForce);
-    player.body.applyForce(boostForce);
+    _boostForce.set(0, 0, -2000 * dt);
+    player.body.quaternion.vmult(_boostForce, _boostForce);
+    player.body.applyForce(_boostForce);
   }
 
   // Physics
@@ -205,6 +231,15 @@ function animate(): void {
     player.position.z
   );
   dirLight.target.updateMatrixWorld();
+
+  // Particles
+  speedLines.update(player.position.z, player.position.x, player.speed);
+  explosions.update(dt);
+
+  // Move neon lights with player
+  for (let i = 0; i < neonLights.length; i++) {
+    neonLights[i].position.z = player.position.z - i * 25;
+  }
 
   // HUD
   hud.update(hp, maxHp, player.speed, score.getScore(), score.combo, nitroFuel);
